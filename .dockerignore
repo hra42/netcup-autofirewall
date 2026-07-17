@@ -1,0 +1,20 @@
+# Keep the build context minimal.
+.git
+.gitignore
+README.md
+*.md
+
+# Local build artifacts
+/netcup-autofirewall
+/echo-server
+*.exe
+
+# Scratch / local
+/_inspect/
+/_permcheck/
+config.json
+
+# Container files themselves aren't needed inside the context
+Containerfile.*
+compose.yaml
+.dockerignore

@@ -1,0 +1,35 @@
+# Build a static netcup-autofirewall CLI binary and ship it in a scratch image.
+# OCI-compatible; works with docker, podman, or any OCI builder.
+#
+#   docker build -t netcup-autofirewall -f Containerfile.cli .
+#
+# The CLI stores its refresh token in a config file. Mount a volume at /config
+# (XDG_CONFIG_HOME) so credentials persist across runs:
+#
+#   # one-time interactive login (opens a URL you approve in a browser):
+#   docker run -it -v netcup-cfg:/config netcup-autofirewall login
+#
+#   # scheduled/unattended apply (cron/launchd on the host, or a timer):
+#   docker run --rm -v netcup-cfg:/config netcup-autofirewall apply --yes
+
+FROM golang:1.26 AS build
+WORKDIR /src
+
+COPY go.mod ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+    -o /out/netcup-autofirewall .
+
+FROM scratch
+# HTTPS to the NetCup API and your echo endpoint needs the CA bundle.
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /out/netcup-autofirewall /netcup-autofirewall
+
+# Config (refresh token, server target, echo URL) lives under XDG_CONFIG_HOME.
+# Mount a volume here to persist it: -v netcup-cfg:/config
+ENV XDG_CONFIG_HOME=/config
+VOLUME ["/config"]
+
+ENTRYPOINT ["/netcup-autofirewall"]

@@ -1,0 +1,9 @@
+# Build output
+/netcup-autofirewall
+/echo-server
+*.exe
+
+# Scratch / local
+/_inspect/
+/_permcheck/
+config.json

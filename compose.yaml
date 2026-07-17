@@ -1,0 +1,25 @@
+# Runs the echo-server. Terminate TLS on 443 in front of this (Cloudflare or a
+# reverse proxy) and forward to the published port below.
+#
+#   docker compose up -d            # or: podman compose up -d
+
+services:
+  echo-server:
+    build:
+      context: .
+      dockerfile: Containerfile.echo-server
+    image: netcup-echo-server
+    container_name: netcup-echo-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ECHO_ADDR: ":8080"
+      # Set a private User-Agent to gate the endpoint more strongly; the CLI must
+      # then pass the same value via --echo-user-agent / echoUserAgent.
+      # ECHO_USER_AGENT: "my-secret-ua"
+    healthcheck:
+      # The image is scratch (no shell), so exec the binary's own check path is
+      # not available; rely on the platform's TCP/HTTP probe instead if needed.
+      # Left minimal here; the /healthz endpoint is open for external probes.
+      disable: true

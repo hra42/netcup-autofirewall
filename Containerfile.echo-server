@@ -1,0 +1,29 @@
+# Build a static echo-server binary and ship it in a scratch image.
+# OCI-compatible; works with docker, podman, or any OCI builder.
+#
+#   docker build -t netcup-echo-server -f Containerfile.echo-server .
+#   docker run -d -p 8080:8080 --name echo netcup-echo-server
+#
+# Put Cloudflare / a reverse proxy in front to terminate TLS on 443 and forward
+# to :8080. The server reads the client IP from CF-Connecting-IP.
+
+FROM golang:1.26 AS build
+WORKDIR /src
+
+# Cache modules first.
+COPY go.mod ./
+RUN go mod download
+
+COPY . .
+# Static, stripped binary; no CGO so it runs on scratch.
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
+    -o /out/echo-server ./cmd/echo-server
+
+FROM scratch
+COPY --from=build /out/echo-server /echo-server
+
+EXPOSE 8080
+# Override the gating User-Agent and listen address via env if desired:
+#   ECHO_ADDR=:8080  ECHO_USER_AGENT=my-secret-ua
+ENV ECHO_ADDR=:8080
+ENTRYPOINT ["/echo-server"]
