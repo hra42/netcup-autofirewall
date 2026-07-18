@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -62,7 +64,68 @@ func (e *APIError) Error() string {
 // do executes a request against path (relative to BaseURL). If body is non-nil
 // it is JSON-encoded. On a 2xx status, out (if non-nil) is JSON-decoded from the
 // response. Non-2xx responses are returned as *APIError.
+// The API serializes firewall changes per user, so a run touching several
+// policies in a row routinely collides with its own previous write; without
+// retrying, the run aborts half-applied.
+//
+// The interface-update task that follows a write is the long pole — it can take
+// several minutes to settle, and every write during that window is rejected. The
+// budget below (exponential backoff, capped) waits up to ~5 minutes, which
+// covers what has been observed in practice.
+// Variables rather than constants so tests can shrink them.
+var (
+	writeRetryInitialDelay = 2 * time.Second
+	writeRetryMaxDelay     = 30 * time.Second
+	writeRetryBudget       = 5 * time.Minute
+)
+
+// IsConcurrentWrite reports whether err is the API's "a write is already
+// running" rejection, which is transient and worth retrying.
+func IsConcurrentWrite(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	// The API signals this as a 400/409 whose message names a running write; the
+	// code field is not stable enough to match on. The observed wording is
+	// "Another firewall policy update is running. Try again later.", but the
+	// phrasing varies across endpoints, so match the stable part: something is
+	// running.
+	msg := strings.ToLower(apiErr.Message)
+	return strings.Contains(msg, "is running") || strings.Contains(msg, "already running")
+}
+
+// do executes a request, retrying transient concurrent-write rejections with
+// exponential backoff until the budget is spent.
 func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
+	deadline := time.Now().Add(writeRetryBudget)
+	delay := writeRetryInitialDelay
+
+	for {
+		err := c.doOnce(ctx, method, path, body, out)
+		if err == nil || !IsConcurrentWrite(err) {
+			return err
+		}
+
+		// Stop once another wait would run past the budget, so the caller gets
+		// the API's own error rather than a timeout of ours.
+		if time.Now().Add(delay).After(deadline) {
+			return fmt.Errorf("%w (still blocked after retrying for %s)", err, writeRetryBudget)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+
+		if delay *= 2; delay > writeRetryMaxDelay {
+			delay = writeRetryMaxDelay
+		}
+	}
+}
+
+func (c *Client) doOnce(ctx context.Context, method, path string, body, out any) error {
 	var reader io.Reader
 	if body != nil {
 		buf, err := json.Marshal(body)
