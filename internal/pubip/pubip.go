@@ -26,21 +26,15 @@ const requestTimeout = 5 * time.Second
 // at echoURL. userAgent is sent with each request (defaults to DefaultUserAgent
 // when empty). IPv6 is best-effort: if it cannot be determined, v6 is returned
 // empty with no error. An error is returned only when IPv4 detection fails.
+//
+// This is a convenience wrapper over Resolve with an EchoSource in ModeDual;
+// use Resolve directly to select a different source or address-family mode.
 func Detect(ctx context.Context, echoURL, userAgent string) (v4, v6 string, err error) {
-	if echoURL == "" {
-		return "", "", fmt.Errorf("no echo endpoint configured (set --echo-url or echoUrl in config)")
-	}
-	if userAgent == "" {
-		userAgent = DefaultUserAgent
-	}
-
-	v4, err = detectFamily(ctx, "tcp4", echoURL, userAgent)
+	res, err := Resolve(ctx, EchoSource{URL: echoURL, UserAgent: userAgent}, ModeDual)
 	if err != nil {
-		return "", "", fmt.Errorf("detecting public IPv4 via %s: %w", echoURL, err)
+		return "", "", err
 	}
-	// IPv6 is optional; ignore its error.
-	v6, _ = detectFamily(ctx, "tcp6", echoURL, userAgent)
-	return v4, v6, nil
+	return res.V4, res.V6, nil
 }
 
 // detectFamily queries echoURL over the given network family ("tcp4" or "tcp6")
