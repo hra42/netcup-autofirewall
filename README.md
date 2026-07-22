@@ -178,9 +178,10 @@ the policy.
 
 ### Address families (incl. DS-Lite)
 
-By default IPv4 is required and IPv6 is a bonus. That fails outright on a
-**DS-Lite** connection, which has no public IPv4 at all. Pick a mode with
-`--ip-mode` (or `"ipMode"` in the config):
+By default IPv4 is required and IPv6 is a bonus. On **DS-Lite**, IPv4 is
+typically shared via CGNAT while IPv6 is your native end-to-end path. In that
+setup, prefer `v6only` to avoid dependence on shared IPv4 reachability. Pick a
+mode with `--ip-mode` (or `"ipMode"` in the config):
 
 | Mode | Behavior |
 |------|----------|
