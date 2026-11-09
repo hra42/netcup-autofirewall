@@ -1,0 +1,20 @@
+# Publish a test image for the edge migration after the checks pass.
+when:
+  - event: manual
+    branch: migrate/edge-images
+
+depends_on: [ci]
+
+steps:
+  - name: publish
+    image: woodpeckerci/plugin-kaniko:2
+    settings:
+      registry: ghcr.io
+      repo: hra42/edge-ip-echo
+      username:
+        from_secret: edge_ghcr_username
+      password:
+        from_secret: edge_ghcr_token
+      dockerfile: Containerfile.echo-server
+      tags:
+        - test-${CI_PIPELINE_NUMBER}-${CI_COMMIT_SHA:0:7}
