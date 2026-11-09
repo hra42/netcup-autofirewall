@@ -1,0 +1,15 @@
+# Verify the firewall CLI and public IP echo server before edge deployment.
+when:
+  - event: push
+    branch: main
+  - event: [pull_request, manual]
+
+steps:
+  - name: test
+    image: golang:1.26
+    commands:
+      - cp -a . /tmp/edge-ci
+      - cd /tmp/edge-ci
+      - go test ./...
+      - go vet ./...
+      - CGO_ENABLED=0 go build ./cmd/echo-server
