@@ -1,7 +1,9 @@
-# Publish a test image for the edge migration after the checks pass.
+# Publish verified main builds for edge GitOps.
 when:
+  - event: push
+    branch: main
   - event: manual
-    branch: migrate/edge-images
+    branch: main
 
 depends_on: [ci]
 
@@ -17,4 +19,4 @@ steps:
         from_secret: edge_ghcr_token
       dockerfile: Containerfile.echo-server
       tags:
-        - test-${CI_PIPELINE_NUMBER}-${CI_COMMIT_SHA:0:7}
+        - main-${CI_PIPELINE_NUMBER}-${CI_COMMIT_SHA:0:7}
