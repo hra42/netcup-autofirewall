@@ -7,6 +7,8 @@ when:
 steps:
   - name: test
     image: golang:1.26
+    environment:
+      GOFLAGS: -buildvcs=false
     commands:
       - cp -a . /tmp/edge-ci
       - cd /tmp/edge-ci
